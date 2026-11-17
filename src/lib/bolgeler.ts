@@ -2,12 +2,23 @@
 // Çizim alanı 240 x 545 birim, vücudun orta çizgisi x = 120.
 
 export type Siddet = "hafif" | "orta" | "siddetli";
+
+// Şiddetin ekranda ve yapay zekaya gönderilen metinde görünen adı
+export const siddetAdlari: Record<Siddet, string> = {
+  hafif: "hafif",
+  orta: "orta",
+  siddetli: "şiddetli",
+};
 export type Gorunum = "on" | "arka";
+
+export type Taraf = "sag" | "sol";
 
 export type Bolge = {
   id: string;
   ad: string;
   gorunum: Gorunum;
+  kod: string; // parçanın türü: "govdeUst", "ustKol", "diz"...
+  taraf: Taraf | null; // kişinin sağı mı solu mu (ortadaki parçalarda null)
   belirtiler: string[];
   d: string; // SVG path: şeklin çizgisi
   ayna: boolean; // true ise şekil orta çizgiye göre aynalanır (karşı taraf)
@@ -88,6 +99,8 @@ function yanBolgeler(gorunum: Gorunum): Bolge[] {
         id: `${gorunum}-${p.kod}-1`,
         ad: `${ekranSolu} ${ad}`,
         gorunum,
+        kod: p.kod,
+        taraf: gorunum === "on" ? "sag" : "sol",
         belirtiler: p.belirtiler,
         d: sekilYan[p.kod],
         ayna: false,
@@ -96,6 +109,8 @@ function yanBolgeler(gorunum: Gorunum): Bolge[] {
         id: `${gorunum}-${p.kod}-2`,
         ad: `${ekranSagi} ${ad}`,
         gorunum,
+        kod: p.kod,
+        taraf: gorunum === "on" ? "sol" : "sag",
         belirtiler: p.belirtiler,
         d: sekilYan[p.kod],
         ayna: true,
@@ -110,7 +125,16 @@ function orta(
   ad: string,
   belirtiler: string[],
 ): Bolge {
-  return { id: `${gorunum}-${kod}`, ad, gorunum, belirtiler, d: sekilOrta[kod], ayna: false };
+  return {
+    id: `${gorunum}-${kod}`,
+    ad,
+    gorunum,
+    kod,
+    taraf: null,
+    belirtiler,
+    d: sekilOrta[kod],
+    ayna: false,
+  };
 }
 
 export const bolgeler: Bolge[] = [

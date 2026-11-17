@@ -2,8 +2,10 @@
 // API anahtarı sadece burada kullanıldığı için kullanıcılar onu göremez.
 // Adres: POST /api/analiz
 
-import { bolgeler, type Siddet } from "@/lib/bolgeler";
+import { acilKontrol } from "@/lib/acil";
 import type { AnalizSonucu } from "@/lib/analiz";
+import { bolgeler, type Bolge, type Siddet } from "@/lib/bolgeler";
+import { agriTipleri, cinsiyetler, sureler } from "@/lib/sorular";
 
 const MODEL = "gemini-2.5-flash";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
@@ -70,33 +72,56 @@ export async function POST(request: Request) {
     return hata("Geçersiz istek.", 400);
   }
 
-  const { bolgeler: gelenBolgeler, belirtiler: gelenBelirtiler } = (govde ?? {}) as {
-    bolgeler?: unknown;
-    belirtiler?: unknown;
-  };
+  const {
+    bolgeler: gelenBolgeler,
+    belirtiler: gelenBelirtiler,
+    ek: gelenEk,
+  } = (govde ?? {}) as { bolgeler?: unknown; belirtiler?: unknown; ek?: unknown };
 
   if (!Array.isArray(gelenBolgeler) || gelenBolgeler.length === 0 || gelenBolgeler.length > 12) {
     return hata("En az bir bölge seçilmelidir.", 400);
   }
 
-  const secilenler: { ad: string; siddet: Siddet; belirtiler: string[] }[] = [];
+  const secilenler: { bolge: Bolge; siddet: Siddet }[] = [];
   for (const g of gelenBolgeler) {
     const bolge = bolgeler.find((b) => b.id === g?.id);
     if (!bolge || typeof g?.siddet !== "string" || !Object.hasOwn(siddetAdi, g.siddet)) {
       return hata("Geçersiz bölge veya şiddet.", 400);
     }
-    secilenler.push({ ad: bolge.ad, siddet: g.siddet as Siddet, belirtiler: bolge.belirtiler });
+    secilenler.push({ bolge, siddet: g.siddet as Siddet });
   }
 
-  const izinliBelirtiler = new Set(secilenler.flatMap((s) => s.belirtiler));
+  const izinliBelirtiler = new Set(secilenler.flatMap((s) => s.bolge.belirtiler));
   const belirtiler = Array.isArray(gelenBelirtiler)
     ? gelenBelirtiler.filter((b): b is string => typeof b === "string" && izinliBelirtiler.has(b))
     : [];
 
+  // Ek bilgiler isteğe bağlı; sadece bizim listemizdeki cevapları kabul et
+  const ek = (gelenEk && typeof gelenEk === "object" ? gelenEk : {}) as Record<string, unknown>;
+  const listeden = (deger: unknown, liste: string[]) =>
+    typeof deger === "string" && liste.includes(deger) ? deger : null;
+  const sure = listeden(ek.sure, sureler);
+  const tip = listeden(ek.tip, agriTipleri);
+  const cinsiyet = listeden(ek.cinsiyet, cinsiyetler);
+  const yas =
+    typeof ek.yas === "number" && Number.isInteger(ek.yas) && ek.yas >= 0 && ek.yas <= 120
+      ? ek.yas
+      : null;
+
+  // Kural tabanlı acil durum kontrolü (tarayıcıdakiyle aynı fonksiyon)
+  const acil = acilKontrol(secilenler, belirtiler);
+
   // 3) Soruyu hazırla
-  const soru = `Kullanıcının şikayetleri:
-${secilenler.map((s) => `- ${s.ad}: ${siddetAdi[s.siddet]} ağrı`).join("\n")}
-- Ek belirtiler: ${belirtiler.length ? belirtiler.join(", ") : "belirtilmedi"}`;
+  const satirlar = [
+    "Kullanıcının şikayetleri:",
+    ...secilenler.map((s) => `- ${s.bolge.ad}: ${siddetAdi[s.siddet]} ağrı`),
+    `- Ek belirtiler: ${belirtiler.length ? belirtiler.join(", ") : "belirtilmedi"}`,
+  ];
+  if (sure) satirlar.push(`- Süre: ${sure}`);
+  if (tip) satirlar.push(`- Ağrının tipi: ${tip}`);
+  if (yas !== null) satirlar.push(`- Yaş: ${yas}`);
+  if (cinsiyet) satirlar.push(`- Cinsiyet: ${cinsiyet}`);
+  const soru = satirlar.join("\n");
 
   // 4) Gemini'ye gönder
   let cevap: Response;
@@ -133,6 +158,9 @@ ${secilenler.map((s) => `- ${s.ad}: ${siddetAdi[s.siddet]} ağrı`).join("\n")}
     const veri = await cevap.json();
     const metin: string = veri.candidates[0].content.parts[0].text;
     const sonuc = JSON.parse(metin) as AnalizSonucu;
+
+    // Kurallarımız acil diyorsa, yapay zeka ne derse desin aciliyet YÜKSEK kalır
+    if (acil) sonuc.aciliyet = "YUKSEK";
     return Response.json(sonuc);
   } catch (e) {
     console.error("Gemini cevabı çözülemedi:", e);

@@ -1,3 +1,7 @@
+import TahlilYorumla from "@/components/TahlilYorumla";
+
+export const metadata = { title: "Tahlil Yorumla" };
+
 export default function Tahlil() {
   return (
     <main>
@@ -10,12 +14,7 @@ export default function Tahlil() {
         </p>
       </div>
 
-      <div className="mx-auto max-w-[800px] px-4 py-6 md:px-20 md:py-8">
-        <div className="mb-6 cursor-pointer rounded-xl border-2 border-dashed border-[#D0CAC0] bg-white px-8 py-12 text-center transition-all hover:border-mavi hover:bg-mavi-zemin">
-          <p className="mb-1.5 text-base text-yazi">Dosya Seç veya Sürükle</p>
-          <small className="text-[13px] text-silik">PNG, JPG veya PDF</small>
-        </div>
-      </div>
+      <TahlilYorumla />
     </main>
   );
 }

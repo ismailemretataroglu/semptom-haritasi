@@ -1,6 +1,6 @@
 export default function Footer() {
   return (
-    <footer className="flex flex-col gap-2 border-t border-cizgi bg-white p-8 text-center">
+    <footer className="flex flex-col gap-2 border-t border-cizgi bg-white p-8 text-center print:hidden">
       <p className="text-sm text-soluk">
         💧 Sağlığınız için günde en az 2 litre su içmeyi unutmayın.
       </p>

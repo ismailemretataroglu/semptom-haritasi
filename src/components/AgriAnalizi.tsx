@@ -1,11 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import AcilUyariKutusu from "@/components/AcilUyariKutusu";
+import EkSorular from "@/components/EkSorular";
 import Kart from "@/components/Kart";
+import KaydetButonu from "@/components/KaydetButonu";
 import SonucKarti from "@/components/SonucKarti";
 import VucutHaritasi, { type Secimler } from "@/components/VucutHaritasi";
+import { acilKontrol } from "@/lib/acil";
 import type { AnalizIstegi, AnalizSonucu } from "@/lib/analiz";
 import { bolgeler, type Siddet } from "@/lib/bolgeler";
+import type { EkBilgi } from "@/lib/sorular";
 
 const siddetler: { deger: Siddet; ad: string }[] = [
   { deger: "hafif", ad: "Hafif" },
@@ -18,6 +23,8 @@ export default function AgriAnalizi() {
   // { "on-govdeUst": "siddetli", "on-ustKol-2": null }
   const [secimler, setSecimler] = useState<Secimler>({});
   const [belirtiler, setBelirtiler] = useState<string[]>([]);
+  // Süre, ağrı tipi, yaş, cinsiyet (hepsi isteğe bağlı)
+  const [ek, setEk] = useState<EkBilgi>({});
 
   // Yapay zeka değerlendirmesinin durumu
   const [yukleniyor, setYukleniyor] = useState(false);
@@ -33,6 +40,12 @@ export default function AgriAnalizi() {
   // En az bir bölge seçili ve hepsinin şiddeti belirlenmiş mi?
   const hazir =
     seciliBolgeler.length > 0 && seciliBolgeler.every((b) => secimler[b.id] !== null);
+
+  // Kural tabanlı acil durum kontrolü: her seçim değişikliğinde yeniden hesaplanır
+  const acilUyari = acilKontrol(
+    seciliBolgeler.map((b) => ({ bolge: b, siddet: secimler[b.id] })),
+    belirtiler,
+  );
 
   // Seçimler değişince eski değerlendirme geçersiz olur, ekrandan kaldır
   function sonucuTemizle() {
@@ -85,6 +98,7 @@ export default function AgriAnalizi() {
     const istek: AnalizIstegi = {
       bolgeler: seciliBolgeler.map((b) => ({ id: b.id, siddet: secimler[b.id]! })),
       belirtiler,
+      ek,
     };
 
     try {
@@ -119,6 +133,8 @@ export default function AgriAnalizi() {
 
       {/* SAĞ: kartlar */}
       <div className="flex w-full flex-1 flex-col gap-4 pt-2">
+        {acilUyari && <AcilUyariKutusu uyari={acilUyari} />}
+
         <Kart baslik={seciliBolgeler.length > 1 ? "Seçili Bölgeler" : "Seçili Bölge"}>
           {seciliBolgeler.length === 0 ? (
             <>
@@ -196,6 +212,16 @@ export default function AgriAnalizi() {
           </Kart>
         )}
 
+        {hazir && (
+          <EkSorular
+            deger={ek}
+            onDegis={(yeni) => {
+              sonucuTemizle();
+              setEk(yeni);
+            }}
+          />
+        )}
+
         <button
           disabled={!hazir || yukleniyor}
           onClick={degerlendir}
@@ -210,7 +236,23 @@ export default function AgriAnalizi() {
           </p>
         )}
 
-        {sonuc && <SonucKarti sonuc={sonuc} />}
+        {sonuc && (
+          <>
+            <SonucKarti sonuc={sonuc} />
+            {/* key: her yeni değerlendirmede buton "Kaydedildi" halinden çıkıp sıfırlanır */}
+            <KaydetButonu
+              key={JSON.stringify(sonuc)}
+              kayit={{
+                tur: "agri",
+                bolgeler: seciliBolgeler.map((b) => ({ ad: b.ad, siddet: secimler[b.id]! })),
+                belirtiler,
+                ek,
+                acil: acilUyari !== null,
+                sonuc,
+              }}
+            />
+          </>
+        )}
       </div>
     </div>
   );
